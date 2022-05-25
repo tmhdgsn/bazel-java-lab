@@ -1,0 +1,7 @@
+load(":def.bzl", "invoker")
+
+invoker(
+    name = "invoker",
+    main_class = "subtool.Subtool",
+    tool = "//subtool",
+)

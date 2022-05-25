@@ -1,0 +1,17 @@
+load("@rules_java//java:defs.bzl", "java_library")
+
+filegroup(
+    name = "files",
+    srcs = ["foo.yaml"],
+)
+
+java_library(
+    name = "subtool",
+    srcs = glob(["*.java"]),
+    data = [":files"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//invokable",
+        "@bazel_tools//tools/java/runfiles",
+    ],
+)

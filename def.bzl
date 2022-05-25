@@ -11,13 +11,16 @@ def _invoker_impl(ctx):
     args.add(ctx.attr.main_class)
     args.add(out)
 
-    tool_runfiles = ctx.attr.tool[DefaultInfo].default_runfiles.files
+    resolved_tools = ctx.resolve_tools(tools = [ctx.attr.tool])
+    resolved_inputs = resolved_tools[0]
+    resolved_input_manifests = resolved_tools[1]
 
     ctx.actions.run(
         arguments = [args],
         executable = ctx.attr._invoker[DefaultInfo].files_to_run,
-        inputs = ctx.attr.tool[JavaInfo].transitive_runtime_deps.to_list() + tool_runfiles.to_list(),
+        inputs = ctx.attr.tool[JavaInfo].transitive_runtime_deps.to_list() + resolved_inputs.to_list(),
         outputs = [out],
+        input_manifests = resolved_input_manifests,
     )
 
     return [

@@ -1,3 +1,31 @@
+def _merged_binary_impl(ctx):
+    invoker = ctx.attr._invoker
+    executable = ctx.actions.declare_file(ctx.label.name)
+    ctx.actions.symlink(output = executable, target_file = invoker[DefaultInfo].files_to_run.executable)
+
+    runfiles = invoker[DefaultInfo].default_runfiles.merge(ctx.attr.tool[DefaultInfo].default_runfiles)
+    return [
+        DefaultInfo(
+            executable = executable,
+            runfiles = runfiles,
+        ),
+    ]
+
+_merged_binary = rule(
+    implementation = _merged_binary_impl,
+    attrs = {
+        "_invoker": attr.label(
+            default = "//invoker:Invoker",
+            executable = True,
+            cfg = "host",
+        ),
+        "tool": attr.label(
+            mandatory = True,
+        ),
+    },
+    executable = True,
+)
+
 def _invoker_impl(ctx):
     out = ctx.actions.declare_file("generated.yaml")
 
@@ -11,25 +39,11 @@ def _invoker_impl(ctx):
     args.add(ctx.attr.main_class)
     args.add(out)
 
-    resolved_tools = ctx.resolve_tools(tools = [ctx.attr.tool])
-    resolved_inputs = resolved_tools[0]
-    resolved_input_manifests = resolved_tools[1]
-    # resolved_inputs = [<generated file subtool/libsubtool.jar>]
-
-    runfiles = ctx.attr.tool[DefaultInfo].default_runfiles.files.to_list()
-    # runfiles has the file we need (subtool/foo.yaml), but passing runfiles to ctx.actions.run inputs
-    # only makes them available at execroot/my_workspace/subtool/foo.yaml
-
-    tool_files_to_run = ctx.attr.tool[DefaultInfo].files_to_run
-    # the executable and runfiles_manifest fields of the subtools FileToRunProvider are both None.
-
     ctx.actions.run(
         arguments = [args],
-        executable = ctx.attr._invoker[DefaultInfo].files_to_run,
-        inputs = ctx.attr.tool[JavaInfo].transitive_runtime_deps.to_list() + resolved_inputs.to_list() + runfiles,
+        executable = ctx.executable.invoker,
+        inputs = ctx.attr.tool[JavaInfo].transitive_runtime_deps.to_list(),
         outputs = [out],
-        input_manifests = resolved_input_manifests,
-        tools = [tool_files_to_run],
     )
 
     return [
@@ -38,15 +52,26 @@ def _invoker_impl(ctx):
         ),
     ]
 
-invoker = rule(
+_invoker = rule(
     implementation = _invoker_impl,
     attrs = {
         "main_class": attr.string(mandatory = True),
-        "tool": attr.label(mandatory = True),
-        "_invoker": attr.label(
-            default = "//invoker:Invoker",
+        "invoker": attr.label(
+            mandatory = True,
             executable = True,
             cfg = "host",
         ),
+        "tool": attr.label(mandatory = True),
     },
 )
+
+def invoker(name, **kwargs):
+    _merged_binary(
+        name = name + "_invoker",
+        tool = kwargs["tool"],
+    )
+    _invoker(
+        name = name,
+        invoker = name + "_invoker",
+        **kwargs
+    )
